@@ -1,0 +1,72 @@
+' Dragon Bot Z Summon use case for Discord client
+'
+' This diagram shows how the summon command is held by Dragon Bot Z
+'
+' Authors: Lahcène Belhadi <lahcene.belhadi@gmail.com>
+@startuml
+
+title Dragon Bot z - Summon use case (Discord)
+
+' Declarations
+actor User as user
+package DiscordClient {
+  (Client) as client
+  (Command Manager) as commandManager
+  (Summon Command) as summonCommand
+' Used to make HTTP requests
+  (HTTP) as http
+}
+
+package Databases {
+  database PortalDB
+  database CharacterDB
+  database PlayerCollectionDB
+}
+
+package Server {
+  (DiscordAPIGateway) as gateway
+  (ServiceAPIGateway) as serviceGateway
+  
+  package Services {
+    (SummonService) as summonService
+    (PortalService) as portalService
+    portalService .down.> PortalDB
+    (CharacterService) as characterService
+    characterService .down.> CharacterDB
+    (PlayerCollectionService) as playerCollection
+    playerCollection .down.> PlayerCollectionDB
+  }
+}
+
+
+
+' Relationships
+' User sends a command to the Discord Client
+' Discord client then sends received command to the command manager
+user -right- client: sends /summon command
+client -down-> commandManager
+
+' The command manager now calls the proper command 
+commandManager -down- summonCommand
+
+' The summon command makes http requests to the backend to retrieve the 
+' newly summoned character
+summonCommand -right- http
+http -right- gateway: **GET** /summon/summon-one: **Character**
+
+' Discord API Gateway redirects the request to the summon service
+gateway -down- summonService: **GET** /summon-one: **Character**
+
+' The summon service then asks the portal service for the current portal's 
+' content via the ServiceAPIGateway
+summonService -down-> serviceGateway: **GET** /portal/current-portal-content: **[Character]**
+serviceGateway --> portalService: **GET** /current-portal-content: **[Character]**
+
+' The portal service asks the Character service to convert the character id
+' it knows into actual Character
+portalService -down-> serviceGateway: **GET** /character/data-many <i>{[id: int]}</i>: **[Character]**
+serviceGateway --> characterService: **GET** /data-many <i>{[id: int]}</i>: **[Character]**
+
+' The summon service adds the character into player's collection
+summonService -down-> serviceGateway: **POST** /player-collection/unique-character/add-one <i>{Character}</i>
+serviceGateway -down-> playerCollection: **POST** /unique-character/add-one <i>{Character}</i>
