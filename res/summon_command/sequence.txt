@@ -1,0 +1,56 @@
+' Dragon Bot Z Summon sequence Diagram
+'
+' This diagram shows how the summon command is held by Dragon Bot Z
+'
+' Authors: Lahcène Belhadi <lahcene.belhadi@gmail.com>
+@startuml
+
+title Dragon Bot z - Summon use case (Discord)
+
+' Declarations
+actor User
+participant Client as client
+participant DiscordAPIGateway as gateway
+participant SummonService
+participant ServiceAPIGateway as serviceGateway
+participant PortalService
+participant PlayerCollection
+
+' Relationships
+User -> client: sends "/summon" command
+activate client
+  client -> gateway: **GET** /summon/summon <i>{player_id: int}</i>: Character
+  activate gateway
+    gateway -> SummonService: **GET** /summon <i>{player_id: int}</i>: Character
+    activate SummonService
+      ' The summon service asks for the characters present in the current portal
+      ' then draws a character from the list
+      ' and finally, removes the resources from the player's collection
+      SummonService -> serviceGateway: **GET** /portal/current-content: [Character]
+      activate serviceGateway
+        serviceGateway -> PortalService: **GET** /current-content: [Character]
+        activate PortalService
+        serviceGateway <-- PortalService: [Character]
+        deactivate PortalService
+      SummonService <-- serviceGateway: [Character]
+      deactivate serviceGateway
+      ' Draws a random character
+      SummonService -> SummonService: draw_character(characters)
+      activate SummonService
+      deactivate SummonService
+      
+      ' Removes resources from player's collection
+      SummonService -> PlayerCollection: **PATCH** /player-collection/resource/remove/ticket/base <i>{player_id: int, amount: int}</i>
+      activate PlayerCollection
+      deactivate PlayerCollection
+      
+      ' Adds the character to the player's collection
+      SummonService -> PlayerCollection: **POST** /player-collection/character/add <i>{player_id: int, character_id: int}</i>
+      activate PlayerCollection
+      deactivate PlayerCollection
+      
+    gateway <-- SummonService: Character
+    deactivate SummonService
+  client <-- gateway: Character
+  deactivate gateway
+deactivate client
